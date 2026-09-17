@@ -13,7 +13,7 @@ export class Game extends Scene {
     private busy = false;
     private elapsed = 0;
     private started = false;
-    private sound = false;
+    private soundEnabled = false;
     private audio: AudioContext | null = null;
     private listeners = new AbortController();
 
@@ -29,11 +29,11 @@ export class Game extends Scene {
         $('#hint-button').addEventListener('click', () => this.hint(), { signal });
         $('#next-button').addEventListener('click', () => { this.level++; this.startLevel(); }, { signal });
         $('#sound-button').addEventListener('click', () => {
-            this.sound = !this.sound;
-            $('#sound-button').setAttribute('aria-pressed', String(this.sound));
-            $('#sound-button').setAttribute('aria-label', this.sound ? 'Mute sound' : 'Enable sound');
-            $('#sound-button').classList.toggle('muted', !this.sound);
-            if (this.sound) this.chime();
+            this.soundEnabled = !this.soundEnabled;
+            $('#sound-button').setAttribute('aria-pressed', String(this.soundEnabled));
+            $('#sound-button').setAttribute('aria-label', this.soundEnabled ? 'Mute sound' : 'Enable sound');
+            $('#sound-button').classList.toggle('muted', !this.soundEnabled);
+            if (this.soundEnabled) this.chime();
         }, { signal });
         document.addEventListener('keydown', event => {
             if ($('#help-dialog').hasAttribute('open')) return;
@@ -200,7 +200,17 @@ export class Game extends Scene {
         glass.fillEllipse(0, 313, 123, 18);
         glass.fillStyle(0xffffff, 0.62);
         glass.fillRoundedRect(-51, 104, 102, 195, 23);
-        glass.fillPoints([{ x: -51, y: 130 }, { x: -51, y: 108 }, { x: -24, y: 79 }, { x: -24, y: 53 }, { x: 24, y: 53 }, { x: 24, y: 79 }, { x: 51, y: 108 }, { x: 51, y: 130 }], true);
+        glass.beginPath();
+        glass.moveTo(-51, 130);
+        glass.lineTo(-51, 108);
+        glass.lineTo(-24, 79);
+        glass.lineTo(-24, 53);
+        glass.lineTo(24, 53);
+        glass.lineTo(24, 79);
+        glass.lineTo(51, 108);
+        glass.lineTo(51, 130);
+        glass.closePath();
+        glass.fillPath();
         const liquid = this.add.graphics();
         container.add(liquid);
         colors.forEach((color, portion) => {
@@ -249,7 +259,7 @@ export class Game extends Scene {
     }
 
     private chime() {
-        if (!this.sound) return;
+        if (!this.soundEnabled) return;
         this.audio ??= new AudioContext();
         const audio = this.audio;
         void audio.resume().then(() => {
