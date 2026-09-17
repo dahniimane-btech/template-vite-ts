@@ -1,4 +1,22 @@
-# Phaser Vite TypeScript Template
+# Chroma - Liquid Bottle Puzzle
+
+A calming color-sorting game built with Phaser and TypeScript. Select a bottle,
+then a destination to pour its top color. Pour only onto the same color or into
+an empty bottle, up to four portions per bottle. Fill three bottles with one
+color each to win; two extra bottles provide space for sorting.
+
+Use Undo to reverse a pour, Restart to replay the same puzzle, and A little hint
+for a solver-backed next move. Winning unlocks the next seeded level. Sound is
+optional and off by default. Bottles work with touch, mouse, Tab/Enter, or keys
+1-5; Escape deselects. The timer starts on the first pour and pauses while help
+is open or the page is hidden.
+
+Run `npm install`, then `npm run dev-nolog` to play locally. Use `npm test` for
+puzzle-rule and solvability coverage, `npm run typecheck` for TypeScript checks,
+and `npm run build-nolog` for a production build. The game draws its own bottle
+art; Google Fonts is optional, with local sans-serif fallbacks.
+
+## Original template
 
 This is a Phaser project template that uses Vite for bundling. It supports hot-reloading for quick development workflow, includes TypeScript support and scripts to generate production-ready builds.
 
