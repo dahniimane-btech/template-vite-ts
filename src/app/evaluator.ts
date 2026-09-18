@@ -2,21 +2,41 @@ import type { Phrase } from './types';
 
 export type EvaluationLevel = 'correct' | 'close' | 'retry';
 
+export interface VerbAnalysis {
+    form: string;
+    infinitive: string;
+    tense: string;
+    person: string;
+}
+
+export interface ConjugationIssue {
+    expected: VerbAnalysis;
+    found: VerbAnalysis | null;
+    explanation: string;
+}
+
+export interface SpellingIssue {
+    found: string;
+    expected: string;
+    kind: 'spelling' | 'accent';
+}
+
 export interface TranslationEvaluation {
     level: EvaluationLevel;
     score: number;
     reference: string;
     missingWords: string[];
     extraWords: string[];
-    conjugationIssues: Array<{ expected: string; found: string }>;
+    conjugationIssues: ConjugationIssue[];
+    spellingIssues: SpellingIssue[];
     accentWarning: boolean;
     summary: string;
 }
 
 const STOP_WORDS = new Set([
     'a', 'al', 'algo', 'ante', 'antes', 'cada', 'como', 'con', 'de', 'del',
-    'desde', 'el', 'ella', 'ellos', 'en', 'entre', 'esa', 'ese', 'eso', 'esta',
-    'este', 'esto', 'ha', 'hay', 'la', 'las', 'le', 'les', 'lo', 'los', 'me',
+    'desde', 'el', 'ella', 'ellos', 'en', 'entre', 'esa', 'ese', 'eso', 'esto',
+    'la', 'las', 'le', 'les', 'lo', 'los', 'me',
     'mi', 'mis', 'mucho', 'muy', 'nos', 'o', 'para', 'pero', 'por', 'que',
     'se', 'si', 'sin', 'su', 'sus', 'te', 'tu', 'tus', 'un', 'una', 'uno',
     'unos', 'y', 'ya', 'yo',
@@ -33,6 +53,64 @@ const SYNONYMS: Record<string, string> = {
     iniciar: 'empezar',
     plata: 'dinero',
     vivienda: 'casa',
+};
+
+type VerbMetadata = Omit<VerbAnalysis, 'form'>;
+
+const VERB_METADATA: Record<string, VerbMetadata> = {
+    acabariamos: { infinitive: 'acabar', tense: 'conditionnel présent', person: '1re personne du pluriel (nosotros)' },
+    aprendan: { infinitive: 'aprender', tense: 'subjonctif présent', person: '3e personne du pluriel (ellos/ustedes)' },
+    aprendas: { infinitive: 'aprender', tense: 'subjonctif présent', person: '2e personne du singulier (tú)' },
+    aprobe: { infinitive: 'aprobar', tense: 'passé simple', person: '1re personne du singulier (yo)' },
+    beba: { infinitive: 'beber', tense: 'subjonctif présent', person: '1re ou 3e personne du singulier' },
+    bebas: { infinitive: 'beber', tense: 'subjonctif présent', person: '2e personne du singulier (tú)' },
+    cambien: { infinitive: 'cambiar', tense: 'subjonctif présent', person: '3e personne du pluriel (ellos/ustedes)' },
+    consiguiera: { infinitive: 'conseguir', tense: 'subjonctif imparfait', person: '1re ou 3e personne du singulier' },
+    cuidamos: { infinitive: 'cuidar', tense: 'présent de l’indicatif', person: '1re personne du pluriel (nosotros)' },
+    dejaba: { infinitive: 'dejar', tense: 'imparfait de l’indicatif', person: '1re ou 3e personne du singulier' },
+    deje: { infinitive: 'dejar', tense: 'passé simple', person: '1re personne du singulier (yo)' },
+    dependemos: { infinitive: 'depender', tense: 'présent de l’indicatif', person: '1re personne du pluriel (nosotros)' },
+    desperdicie: { infinitive: 'desperdiciar', tense: 'subjonctif présent', person: '1re ou 3e personne du singulier' },
+    discutamos: { infinitive: 'discutir', tense: 'subjonctif présent', person: '1re personne du pluriel (nosotros)' },
+    empece: { infinitive: 'empezar', tense: 'passé simple', person: '1re personne du singulier (yo)' },
+    empezare: { infinitive: 'empezar', tense: 'futur simple', person: '1re personne du singulier (yo)' },
+    era: { infinitive: 'ser', tense: 'imparfait de l’indicatif', person: '1re ou 3e personne du singulier' },
+    es: { infinitive: 'ser', tense: 'présent de l’indicatif', person: '3e personne du singulier (él/ella/usted)' },
+    esta: { infinitive: 'estar', tense: 'présent de l’indicatif', person: '3e personne du singulier (él/ella/usted)' },
+    estas: { infinitive: 'estar', tense: 'présent de l’indicatif', person: '2e personne du singulier (tú)' },
+    este: { infinitive: 'estar', tense: 'subjonctif présent', person: '1re ou 3e personne du singulier' },
+    estoy: { infinitive: 'estar', tense: 'présent de l’indicatif', person: '1re personne du singulier (yo)' },
+    existan: { infinitive: 'existir', tense: 'subjonctif présent', person: '3e personne du pluriel (ellos/ustedes)' },
+    existieran: { infinitive: 'existir', tense: 'subjonctif imparfait', person: '3e personne du pluriel (ellos/ustedes)' },
+    hago: { infinitive: 'hacer', tense: 'présent de l’indicatif', person: '1re personne du singulier (yo)' },
+    ha: { infinitive: 'haber', tense: 'présent de l’indicatif (auxiliaire)', person: '3e personne du singulier (él/ella/usted)' },
+    hay: { infinitive: 'haber', tense: 'présent de l’indicatif', person: 'forme impersonnelle' },
+    hubiera: { infinitive: 'haber', tense: 'subjonctif imparfait', person: '1re ou 3e personne du singulier' },
+    llevo: { infinitive: 'llevar', tense: 'présent de l’indicatif', person: '1re personne du singulier (yo)' },
+    lloviera: { infinitive: 'llover', tense: 'subjonctif imparfait', person: '3e personne du singulier' },
+    llueva: { infinitive: 'llover', tense: 'subjonctif présent', person: '3e personne du singulier' },
+    mudaria: { infinitive: 'mudar(se)', tense: 'conditionnel présent', person: '1re ou 3e personne du singulier' },
+    mudaremos: { infinitive: 'mudar(se)', tense: 'futur simple', person: '1re personne du pluriel (nosotros)' },
+    pasaba: { infinitive: 'pasar', tense: 'imparfait de l’indicatif', person: '1re ou 3e personne du singulier' },
+    podamos: { infinitive: 'poder', tense: 'subjonctif présent', person: '1re personne du pluriel (nosotros)' },
+    prefiero: { infinitive: 'preferir', tense: 'présent de l’indicatif', person: '1re personne du singulier (yo)' },
+    reduzcamos: { infinitive: 'reducir', tense: 'subjonctif présent', person: '1re personne du pluriel (nosotros)' },
+    renuncie: { infinitive: 'renunciar', tense: 'passé simple', person: '1re personne du singulier (yo)' },
+    salga: { infinitive: 'salir', tense: 'subjonctif présent', person: '1re ou 3e personne du singulier' },
+    sea: { infinitive: 'ser', tense: 'subjonctif présent', person: '1re ou 3e personne du singulier' },
+    sean: { infinitive: 'ser', tense: 'subjonctif présent', person: '3e personne du pluriel (ellos/ustedes)' },
+    senti: { infinitive: 'sentir', tense: 'passé simple', person: '1re personne du singulier (yo)' },
+    sientas: { infinitive: 'sentir(se)', tense: 'subjonctif présent', person: '2e personne du singulier (tú)' },
+    sigas: { infinitive: 'seguir', tense: 'subjonctif présent', person: '2e personne du singulier (tú)' },
+    sufriran: { infinitive: 'sufrir', tense: 'futur simple', person: '3e personne du pluriel (ellos/ustedes)' },
+    suelo: { infinitive: 'soler', tense: 'présent de l’indicatif', person: '1re personne du singulier (yo)' },
+    tenga: { infinitive: 'tener', tense: 'subjonctif présent', person: '1re ou 3e personne du singulier' },
+    tengas: { infinitive: 'tener', tense: 'subjonctif présent', person: '2e personne du singulier (tú)' },
+    terminamos: { infinitive: 'terminar', tense: 'présent ou passé simple', person: '1re personne du pluriel (nosotros)' },
+    termine: { infinitive: 'terminar', tense: 'subjonctif présent', person: '1re ou 3e personne du singulier' },
+    terminemos: { infinitive: 'terminar', tense: 'subjonctif présent', person: '1re personne du pluriel (nosotros)' },
+    trabajamos: { infinitive: 'trabajar', tense: 'présent ou passé simple', person: '1re personne du pluriel (nosotros)' },
+    trabajando: { infinitive: 'trabajar', tense: 'gérondif', person: 'forme impersonnelle' },
 };
 
 const VERB_FORMS = new Set([
@@ -122,6 +200,7 @@ interface CandidateScore {
     missingWords: string[];
     extraWords: string[];
     conjugationIssues: Array<{ expected: string; found: string }>;
+    spellingIssues: SpellingIssue[];
 }
 
 function scoreCandidate(answer: string, reference: string): CandidateScore {
@@ -130,6 +209,7 @@ function scoreCandidate(answer: string, reference: string): CandidateScore {
     const used = new Set<number>();
     const missingWords: string[] = [];
     const conjugationIssues: Array<{ expected: string; found: string }> = [];
+    const spellingIssues: SpellingIssue[] = [];
     let matchPoints = 0;
 
     for (const expectedToken of expected) {
@@ -159,6 +239,7 @@ function scoreCandidate(answer: string, reference: string): CandidateScore {
                 conjugationIssues.push({ expected: expectedToken, found });
                 matchPoints += 0.3;
             } else {
+                spellingIssues.push({ expected: expectedToken, found, kind: 'spelling' });
                 matchPoints += 0.65;
             }
         } else if (
@@ -196,7 +277,82 @@ function scoreCandidate(answer: string, reference: string): CandidateScore {
         missingWords,
         extraWords,
         conjugationIssues,
+        spellingIssues,
     };
+}
+
+function inferRegularVerb(form: string): VerbAnalysis | null {
+    const normalized = stripAccents(form);
+    const nonFinitePatterns: Array<[RegExp, string, string]> = [
+        [/ando$/, 'ar', 'gérondif'],
+        [/iendo$/, 'er', 'gérondif'],
+        [/ado$/, 'ar', 'participe passé'],
+        [/ido$/, 'er', 'participe passé'],
+        [/ar$/, '', 'infinitif'],
+        [/er$/, '', 'infinitif'],
+        [/ir$/, '', 'infinitif'],
+    ];
+
+    for (const [pattern, ending, tense] of nonFinitePatterns) {
+        if (!pattern.test(normalized)) continue;
+        let infinitive = normalized;
+        if (tense === 'gérondif' || tense === 'participe passé') {
+            infinitive = normalized.replace(pattern, ending);
+        }
+        return { form, infinitive, tense, person: 'forme impersonnelle' };
+    }
+    return null;
+}
+
+function analyzeVerb(form: string): VerbAnalysis {
+    const normalized = stripAccents(form);
+    const metadata = VERB_METADATA[normalized];
+    if (metadata) return { form, ...metadata };
+
+    return inferRegularVerb(form) ?? {
+        form,
+        infinitive: 'non identifié localement',
+        tense: 'forme verbale à vérifier',
+        person: 'personne à vérifier dans le contexte',
+    };
+}
+
+function detailConjugationIssue(expected: string, found: string): ConjugationIssue {
+    const expectedAnalysis = analyzeVerb(expected);
+    const foundAnalysis = found ? analyzeVerb(found) : null;
+    const sameInfinitive = foundAnalysis
+        && expectedAnalysis.infinitive !== 'non identifié localement'
+        && expectedAnalysis.infinitive === foundAnalysis.infinitive;
+    const explanation = !foundAnalysis
+        ? `Il manque le verbe « ${expectedAnalysis.infinitive} » sous la forme « ${expected} ».`
+        : sameInfinitive
+            ? `Le verbe est correct, mais la forme ne correspond pas au temps ou à la personne attendue.`
+            : `La proposition attend ici « ${expected} », forme du verbe « ${expectedAnalysis.infinitive} ».`;
+
+    return { expected: expectedAnalysis, found: foundAnalysis, explanation };
+}
+
+function findAccentIssues(answer: string, reference: string): SpellingIssue[] {
+    const actual = tokenize(answer, true);
+    const expected = tokenize(reference, true);
+    const issues: SpellingIssue[] = [];
+    const length = Math.min(actual.length, expected.length);
+
+    for (let index = 0; index < length; index++) {
+        if (
+            actual[index] !== expected[index]
+            && stripAccents(actual[index]) === stripAccents(expected[index])
+        ) {
+            issues.push({ found: actual[index], expected: expected[index], kind: 'accent' });
+        }
+    }
+    return issues;
+}
+
+function restoreWrittenForm(normalizedForm: string, source: string): string {
+    return tokenize(source, true).find(
+        (token) => stripAccents(token) === stripAccents(normalizedForm),
+    ) ?? normalizedForm;
 }
 
 export function evaluateTranslation(answer: string, phrase: Phrase): TranslationEvaluation {
@@ -211,10 +367,30 @@ export function evaluateTranslation(answer: string, phrase: Phrase): Translation
     const referenceWithAccents = tokenize(scored.reference, true).join(' ');
     const accentWarning = answerWithoutAccents === referenceWithoutAccents
         && answerWithAccents !== referenceWithAccents;
+    const missingVerbIssues = scored.missingWords
+        .filter(isLikelyVerb)
+        .map((expected) => ({
+            expected: restoreWrittenForm(expected, scored.reference),
+            found: '',
+        }));
+    const conjugationIssues = [...scored.conjugationIssues, ...missingVerbIssues]
+        .map((issue) => detailConjugationIssue(
+            restoreWrittenForm(issue.expected, scored.reference),
+            issue.found ? restoreWrittenForm(issue.found, answer) : '',
+        ))
+        .slice(0, 4);
+    const spellingIssues = [
+        ...scored.spellingIssues,
+        ...findAccentIssues(answer, scored.reference),
+    ].filter((issue, index, all) => all.findIndex(
+        (candidate) => candidate.found === issue.found
+            && candidate.expected === issue.expected
+            && candidate.kind === issue.kind,
+    ) === index).slice(0, 6);
 
     let level: EvaluationLevel;
     const missingVerb = scored.missingWords.some(isLikelyVerb);
-    if (scored.score >= 0.82 && scored.conjugationIssues.length === 0 && !missingVerb) {
+    if (scored.score >= 0.82 && conjugationIssues.length === 0 && !missingVerb) {
         level = 'correct';
     } else if (scored.score >= 0.58) {
         level = 'close';
@@ -234,7 +410,8 @@ export function evaluateTranslation(answer: string, phrase: Phrase): Translation
         reference: scored.reference,
         missingWords: scored.missingWords.slice(0, 5),
         extraWords: scored.extraWords.slice(0, 5),
-        conjugationIssues: scored.conjugationIssues.slice(0, 3),
+        conjugationIssues,
+        spellingIssues,
         accentWarning,
         summary,
     };

@@ -387,18 +387,83 @@ export class App {
         result.appendChild(referenceLine);
 
         if (this.evaluation.conjugationIssues.length > 0) {
-            const conjugation = document.createElement('p');
-            conjugation.textContent = `Conjugaison à vérifier : ${this.evaluation.conjugationIssues
-                .map((issue) => `${issue.found} → ${issue.expected}`)
-                .join(', ')}`;
-            result.appendChild(conjugation);
+            const section = document.createElement('div');
+            section.className = 'feedback-section';
+            const title = document.createElement('h3');
+            title.textContent = 'Conjugaison';
+            section.appendChild(title);
+
+            this.evaluation.conjugationIssues.forEach((issue) => {
+                const detail = document.createElement('div');
+                detail.className = 'feedback-detail';
+
+                const correction = document.createElement('strong');
+                correction.textContent = issue.found
+                    ? `${issue.found.form} → ${issue.expected.form}`
+                    : `Forme manquante : ${issue.expected.form}`;
+
+                const expected = document.createElement('p');
+                expected.textContent = `Attendu : ${issue.expected.infinitive} · ${issue.expected.tense} · ${issue.expected.person}.`;
+                detail.append(correction, expected);
+
+                if (issue.found) {
+                    const found = document.createElement('p');
+                    found.textContent = `Ta forme : ${issue.found.infinitive} · ${issue.found.tense} · ${issue.found.person}.`;
+                    detail.appendChild(found);
+                }
+
+                const explanation = document.createElement('p');
+                explanation.textContent = issue.explanation;
+                detail.appendChild(explanation);
+                section.appendChild(detail);
+            });
+            result.appendChild(section);
+        }
+        if (this.evaluation.spellingIssues.length > 0) {
+            const section = document.createElement('div');
+            section.className = 'feedback-section';
+            const title = document.createElement('h3');
+            title.textContent = 'Orthographe et accents';
+            section.appendChild(title);
+
+            const list = document.createElement('ul');
+            this.evaluation.spellingIssues.forEach((issue) => {
+                const item = document.createElement('li');
+                item.textContent = issue.kind === 'accent'
+                    ? `Accent : « ${issue.found} » doit s'écrire « ${issue.expected} ».`
+                    : `Orthographe probable : « ${issue.found} » → « ${issue.expected} ».`;
+                list.appendChild(item);
+            });
+            section.appendChild(list);
+            result.appendChild(section);
         }
         if (this.evaluation.missingWords.length > 0) {
-            const vocabulary = document.createElement('p');
-            vocabulary.textContent = `Lexique attendu ou idée manquante : ${this.evaluation.missingWords.join(', ')}`;
-            result.appendChild(vocabulary);
+            const missingLexicon = this.evaluation.missingWords.filter((word) =>
+                !this.evaluation?.conjugationIssues.some((issue) => issue.expected.form === word));
+            if (missingLexicon.length > 0) {
+                const section = document.createElement('div');
+                section.className = 'feedback-section';
+                const title = document.createElement('h3');
+                title.textContent = 'Lexique ou idée manquante';
+                const detail = document.createElement('p');
+                detail.textContent = `Compare ces éléments avec ta formulation : ${missingLexicon
+                    .map((word) => `« ${word} »`)
+                    .join(', ')}. Ils portent une partie importante du sens de la proposition.`;
+                section.append(title, detail);
+                result.appendChild(section);
+            }
         }
-        if (this.evaluation.accentWarning) {
+        if (this.evaluation.extraWords.length > 0 && this.evaluation.level !== 'correct') {
+            const section = document.createElement('div');
+            section.className = 'feedback-section';
+            const title = document.createElement('h3');
+            title.textContent = 'Mots à vérifier dans ta réponse';
+            const detail = document.createElement('p');
+            detail.textContent = this.evaluation.extraWords.map((word) => `« ${word} »`).join(', ');
+            section.append(title, detail);
+            result.appendChild(section);
+        }
+        if (this.evaluation.accentWarning && this.evaluation.spellingIssues.length === 0) {
             const accents = document.createElement('p');
             accents.textContent = 'Le sens est bon, mais vérifie les accents écrits.';
             result.appendChild(accents);
