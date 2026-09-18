@@ -32,9 +32,16 @@ lancer les scripts via `npm`.
 | `npm install` | Installe les dépendances du projet |
 | `npm run dev` | Lance un serveur de développement (hot-reload) |
 | `npm run build` | Crée un build de production dans le dossier `dist` |
-| `npm run dev-nolog` / `npm run build-nolog` | Idem sans télémétrie (voir "About log.js" plus bas) |
+| `npm run typecheck` | Vérifie les types TypeScript sans générer de fichiers |
 
 Le serveur de développement tourne par défaut sur `http://localhost:8080`.
+
+## Déploiement
+
+`npm run build` génère un dossier `dist` autonome (HTML + CSS + JS).
+Déploie **tout le contenu de `dist`** sur n'importe quel hébergeur statique
+(GitHub Pages, Netlify, Vercel, un simple serveur web...). Le build utilise des
+chemins relatifs (`base: './'`), il fonctionne donc aussi dans un sous-dossier.
 
 ## Structure du projet
 
@@ -63,9 +70,8 @@ Le nombre de nouvelles phrases par jour (20 par défaut) et de révisions par
 jour (10 par défaut) est réglable directement dans l'application (icône ⚙️),
 et persiste dans le `localStorage` du navigateur, comme toute la progression.
 
-## About log.js
+## Origine
 
-Ce template dérive du [Phaser Vite TypeScript template](https://github.com/phaserjs/template-vite-ts).
-Le fichier `log.js` envoie un unique appel anonyme à `gryzor.co` (Phaser
-Studio) pour des statistiques d'usage du template ; utilise les variantes
-`*-nolog` ci-dessus, ou supprime `log.js`, si tu préfères l'éviter.
+Ce projet dérive du [Phaser Vite TypeScript template](https://github.com/phaserjs/template-vite-ts),
+dont il ne conserve que l'outillage Vite + TypeScript : le moteur Phaser et les
+scènes de jeu ont été retirés au profit de l'interface de flashcards.
