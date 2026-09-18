@@ -93,7 +93,8 @@ export class App {
     private checkProductionAnswer(): void {
         const card = this.queue[this.queueIndex];
         const phrase = card ? getPhrase(card.id) : undefined;
-        if (!card || !phrase || card.direction !== 'fr-es' || !this.productionAnswer.trim()) return;
+        const isProduction = this.sessionKind === 'writing' || card?.direction === 'fr-es';
+        if (!card || !phrase || !isProduction || !this.productionAnswer.trim()) return;
 
         this.evaluation = evaluateTranslation(this.productionAnswer, phrase);
         this.flipped = true;
