@@ -294,6 +294,24 @@ body {
     cursor: pointer;
 }
 
+.secondary-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.writing-start-btn {
+    padding: 13px 26px;
+    border-color: rgba(255, 183, 3, 0.65);
+    color: #ffca3a;
+}
+
+.writing-help {
+    max-width: 440px;
+    margin: -8px 0 0;
+    font-size: 0.8rem;
+    opacity: 0.62;
+}
+
 .grade-buttons {
     display: grid;
     grid-template-columns: repeat(4, 1fr);

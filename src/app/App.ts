@@ -7,6 +7,7 @@ import { evaluateTranslation } from './evaluator';
 import type { TranslationEvaluation } from './evaluator';
 
 type View = 'home' | 'session' | 'summary' | 'settings';
+type SessionKind = 'daily' | 'writing';
 
 export class App {
     private root: HTMLElement;
@@ -15,6 +16,7 @@ export class App {
 
     private queue: CardState[] = [];
     private queueIndex = 0;
+    private sessionKind: SessionKind = 'daily';
     private flipped = false;
     private productionAnswer = '';
     private evaluation: TranslationEvaluation | null = null;
@@ -55,7 +57,18 @@ export class App {
 
     private startSession(): void {
         const session: DailySession = buildDailySession(this.state);
+        this.sessionKind = 'daily';
         this.queue = shuffle([...session.reviewCards, ...session.newCards]);
+        this.resetSession();
+    }
+
+    private startWritingSession(): void {
+        this.sessionKind = 'writing';
+        this.queue = shuffle(Object.values(this.state.cards)).slice(0, 10);
+        this.resetSession();
+    }
+
+    private resetSession(): void {
         this.queueIndex = 0;
         this.flipped = false;
         this.productionAnswer = '';
@@ -91,9 +104,11 @@ export class App {
         const card = this.queue[this.queueIndex];
         if (!card) return;
 
-        const today = todayISO();
-        const updated = scheduleCard(card, g, today);
-        this.state.cards[updated.id] = updated;
+        if (this.sessionKind === 'daily') {
+            const today = todayISO();
+            const updated = scheduleCard(card, g, today);
+            this.state.cards[updated.id] = updated;
+        }
         this.sessionStudied++;
         if (g === 'again') this.sessionAgain++;
 
@@ -103,19 +118,21 @@ export class App {
         this.evaluation = null;
 
         if (this.queueIndex >= this.queue.length) {
-            const today2 = todayISO();
-            if (this.state.lastStudyDate !== today2) {
-                const wasYesterday = this.state.lastStudyDate === addDays(today2, -1);
-                this.state.streak = wasYesterday ? this.state.streak + 1 : 1;
-                this.state.lastStudyDate = today2;
-                this.state.history.push({ date: today2, studied: this.sessionStudied });
-            } else {
-                const entry = this.state.history.find((h) => h.date === today2);
-                if (entry) entry.studied += this.sessionStudied;
+            if (this.sessionKind === 'daily') {
+                const today2 = todayISO();
+                if (this.state.lastStudyDate !== today2) {
+                    const wasYesterday = this.state.lastStudyDate === addDays(today2, -1);
+                    this.state.streak = wasYesterday ? this.state.streak + 1 : 1;
+                    this.state.lastStudyDate = today2;
+                    this.state.history.push({ date: today2, studied: this.sessionStudied });
+                } else {
+                    const entry = this.state.history.find((h) => h.date === today2);
+                    if (entry) entry.studied += this.sessionStudied;
+                }
+                this.persist();
             }
-            this.persist();
             this.view = 'summary';
-        } else {
+        } else if (this.sessionKind === 'daily') {
             this.persist();
         }
         this.render();
@@ -185,6 +202,7 @@ export class App {
 
         const newCount = session.newCards.length;
         const reviewCount = session.reviewCards.length;
+        const writingCount = Math.min(Object.keys(this.state.cards).length, 10);
         const backlog = Math.max(0, session.reviewDueTotal - reviewCount);
 
         wrap.innerHTML = `
@@ -210,6 +228,20 @@ export class App {
         startBtn.onclick = () => this.startSession();
 
         wrap.appendChild(startBtn);
+
+        const writingBtn = document.createElement('button');
+        writingBtn.className = 'secondary-btn writing-start-btn';
+        writingBtn.textContent = writingCount > 0
+            ? `✍️ S'entraîner à écrire (${writingCount} phrases)`
+            : `✍️ S'entraîner à écrire`;
+        writingBtn.disabled = writingCount === 0;
+        writingBtn.onclick = () => this.startWritingSession();
+        wrap.appendChild(writingBtn);
+
+        const writingHelp = document.createElement('p');
+        writingHelp.className = 'writing-help';
+        writingHelp.textContent = 'Disponible dès le premier jour, sans attendre que les cartes soient maîtrisées.';
+        wrap.appendChild(writingHelp);
         return wrap;
     }
 
@@ -234,7 +266,7 @@ export class App {
         progress.innerHTML = `<div class="progress-fill" style="width:${pct}%"></div>`;
         progress.title = `${this.queueIndex}/${this.queue.length}`;
 
-        const isProduction = card.direction === 'fr-es';
+        const isProduction = this.sessionKind === 'writing' || card.direction === 'fr-es';
         wrap.appendChild(progress);
 
         if (isProduction) {
@@ -388,10 +420,12 @@ export class App {
         const wrap = document.createElement('div');
         wrap.className = 'view view-summary';
         wrap.innerHTML = `
-            <h1>Séance terminée 🎉</h1>
+            <h1>${this.sessionKind === 'writing' ? 'Entraînement écrit terminé ✍️' : 'Séance terminée 🎉'}</h1>
             <p>${this.sessionStudied} carte(s) étudiée(s) aujourd'hui.</p>
             <p>${this.sessionAgain} à revoir bientôt.</p>
-            <p>Série actuelle : 🔥 ${this.state.streak} jour(s) consécutif(s).</p>
+            ${this.sessionKind === 'daily'
+                ? `<p>Série actuelle : 🔥 ${this.state.streak} jour(s) consécutif(s).</p>`
+                : `<p>Cet entraînement libre ne modifie pas le planning de répétition espacée.</p>`}
         `;
         const btn = document.createElement('button');
         btn.className = 'primary-btn';

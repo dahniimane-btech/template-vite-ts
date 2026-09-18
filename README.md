@@ -17,6 +17,9 @@ quelques minutes par jour.
   automatiquement : le français apparaît devant, et c'est à toi d'écrire une
   phrase en espagnol. Une correction locale tolérante vérifie le sens global,
   le lexique et les formes verbales sans exiger une traduction mot à mot.
+- Le bouton **S'entraîner à écrire** permet aussi de travailler immédiatement
+  jusqu'à 10 phrases déjà découvertes, dès le premier jour, sans attendre leur
+  passage automatique au niveau maîtrisé.
 - Après avoir vu la traduction, tu t'auto-évalues avec 4 boutons (raccourcis
   clavier `1`-`4`) : **Encore**, **Difficile**, **Bien**, **Facile**. Cela
   détermine quand la carte reviendra.
