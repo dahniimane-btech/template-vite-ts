@@ -3,6 +3,8 @@ import { loadState, saveState } from './storage';
 import { ensureDailyGeneration, buildDailySession, scheduleCard, getPhrase, totalMastered, shuffle } from './srs';
 import { addDays, todayISO } from './date';
 import type { DailySession } from './srs';
+import { evaluateTranslation } from './evaluator';
+import type { TranslationEvaluation } from './evaluator';
 
 type View = 'home' | 'session' | 'summary' | 'settings';
 
@@ -14,6 +16,8 @@ export class App {
     private queue: CardState[] = [];
     private queueIndex = 0;
     private flipped = false;
+    private productionAnswer = '';
+    private evaluation: TranslationEvaluation | null = null;
     private sessionStudied = 0;
     private sessionAgain = 0;
 
@@ -54,6 +58,8 @@ export class App {
         this.queue = shuffle([...session.reviewCards, ...session.newCards]);
         this.queueIndex = 0;
         this.flipped = false;
+        this.productionAnswer = '';
+        this.evaluation = null;
         this.sessionStudied = 0;
         this.sessionAgain = 0;
 
@@ -71,6 +77,16 @@ export class App {
         this.render();
     }
 
+    private checkProductionAnswer(): void {
+        const card = this.queue[this.queueIndex];
+        const phrase = card ? getPhrase(card.id) : undefined;
+        if (!card || !phrase || card.direction !== 'fr-es' || !this.productionAnswer.trim()) return;
+
+        this.evaluation = evaluateTranslation(this.productionAnswer, phrase);
+        this.flipped = true;
+        this.render();
+    }
+
     private grade(g: Grade): void {
         const card = this.queue[this.queueIndex];
         if (!card) return;
@@ -83,6 +99,8 @@ export class App {
 
         this.queueIndex++;
         this.flipped = false;
+        this.productionAnswer = '';
+        this.evaluation = null;
 
         if (this.queueIndex >= this.queue.length) {
             const today2 = todayISO();
@@ -105,6 +123,8 @@ export class App {
 
     private onKeyDown(e: KeyboardEvent): void {
         if (this.view !== 'session') return;
+        const target = e.target as HTMLElement | null;
+        if (target?.tagName === 'TEXTAREA' || target?.tagName === 'INPUT') return;
         if (!this.flipped) {
             if (e.code === 'Space' || e.code === 'Enter') {
                 e.preventDefault();
@@ -215,27 +235,29 @@ export class App {
         progress.title = `${this.queueIndex}/${this.queue.length}`;
 
         const isProduction = card.direction === 'fr-es';
-        const front = isProduction ? phrase.fr : phrase.es;
-        const back = isProduction ? phrase.es : phrase.fr;
+        wrap.appendChild(progress);
 
-        const cardEl = document.createElement('div');
-        cardEl.className = 'flash-card' + (this.flipped ? ' flipped' : '');
-        cardEl.innerHTML = `
-            <div class="flash-card-inner">
-                <div class="flash-face flash-front">
-                    <div class="flash-topic">${phrase.topic} · ${isProduction ? 'Production 🎯 (traduis en espagnol)' : 'Reconnaissance'}</div>
-                    <div class="flash-text">${front}</div>
-                    <div class="flash-hint">${isProduction ? 'Essaie de la dire à voix haute, puis retourne la carte' : 'Touche la carte pour voir la traduction'}</div>
+        if (isProduction) {
+            wrap.appendChild(this.renderProductionCard(phrase));
+        } else {
+            const cardEl = document.createElement('div');
+            cardEl.className = 'flash-card' + (this.flipped ? ' flipped' : '');
+            cardEl.innerHTML = `
+                <div class="flash-card-inner">
+                    <div class="flash-face flash-front">
+                        <div class="flash-topic">${phrase.topic} · Reconnaissance</div>
+                        <div class="flash-text">${phrase.es}</div>
+                        <div class="flash-hint">Touche la carte pour voir la traduction</div>
+                    </div>
+                    <div class="flash-face flash-back">
+                        <div class="flash-topic">Traduction</div>
+                        <div class="flash-text">${phrase.fr}</div>
+                    </div>
                 </div>
-                <div class="flash-face flash-back">
-                    <div class="flash-topic">Traduction</div>
-                    <div class="flash-text">${back}</div>
-                </div>
-            </div>
-        `;
-        cardEl.onclick = () => this.flip();
-
-        wrap.append(progress, cardEl);
+            `;
+            cardEl.onclick = () => this.flip();
+            wrap.appendChild(cardEl);
+        }
 
         if (this.flipped) {
             const btns = document.createElement('div');
@@ -256,6 +278,110 @@ export class App {
         }
 
         return wrap;
+    }
+
+    private renderProductionCard(phrase: NonNullable<ReturnType<typeof getPhrase>>): HTMLElement {
+        const container = document.createElement('div');
+        container.className = 'production-card';
+
+        const topic = document.createElement('div');
+        topic.className = 'flash-topic';
+        topic.textContent = `${phrase.topic} · Production en espagnol 🎯`;
+
+        const prompt = document.createElement('div');
+        prompt.className = 'flash-text';
+        prompt.textContent = phrase.fr;
+
+        container.append(topic, prompt);
+
+        if (!this.evaluation) {
+            const hint = document.createElement('p');
+            hint.className = 'production-hint';
+            hint.textContent = 'Traduis avec tes propres mots. Le sens, le lexique et la conjugaison comptent davantage que le mot-à-mot.';
+
+            const input = document.createElement('textarea');
+            input.className = 'production-input';
+            input.rows = 3;
+            input.lang = 'es';
+            input.autocomplete = 'off';
+            input.spellcheck = true;
+            input.placeholder = 'Écris ta phrase en espagnol…';
+            input.value = this.productionAnswer;
+            input.oninput = () => { this.productionAnswer = input.value; };
+            input.onkeydown = (event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    this.productionAnswer = input.value;
+                    this.checkProductionAnswer();
+                }
+            };
+
+            const checkButton = document.createElement('button');
+            checkButton.className = 'primary-btn';
+            checkButton.textContent = 'Vérifier ma phrase';
+            checkButton.onclick = () => {
+                this.productionAnswer = input.value;
+                this.checkProductionAnswer();
+            };
+
+            container.append(hint, input, checkButton);
+            queueMicrotask(() => input.focus());
+            return container;
+        }
+
+        const result = document.createElement('div');
+        result.className = `evaluation evaluation-${this.evaluation.level}`;
+
+        const heading = document.createElement('strong');
+        heading.textContent = this.evaluation.level === 'correct'
+            ? `Correct · ${this.evaluation.score}%`
+            : this.evaluation.level === 'close'
+                ? `Presque · ${this.evaluation.score}%`
+                : `À retravailler · ${this.evaluation.score}%`;
+
+        const summary = document.createElement('p');
+        summary.textContent = this.evaluation.summary;
+        result.append(heading, summary);
+
+        const answerLine = document.createElement('p');
+        answerLine.className = 'answer-line';
+        answerLine.textContent = `Ta réponse : ${this.productionAnswer}`;
+        result.appendChild(answerLine);
+
+        const referenceLine = document.createElement('p');
+        referenceLine.className = 'reference-line';
+        referenceLine.textContent = `Proposition : ${this.evaluation.reference}`;
+        result.appendChild(referenceLine);
+
+        if (this.evaluation.conjugationIssues.length > 0) {
+            const conjugation = document.createElement('p');
+            conjugation.textContent = `Conjugaison à vérifier : ${this.evaluation.conjugationIssues
+                .map((issue) => `${issue.found} → ${issue.expected}`)
+                .join(', ')}`;
+            result.appendChild(conjugation);
+        }
+        if (this.evaluation.missingWords.length > 0) {
+            const vocabulary = document.createElement('p');
+            vocabulary.textContent = `Lexique attendu ou idée manquante : ${this.evaluation.missingWords.join(', ')}`;
+            result.appendChild(vocabulary);
+        }
+        if (this.evaluation.accentWarning) {
+            const accents = document.createElement('p');
+            accents.textContent = 'Le sens est bon, mais vérifie les accents écrits.';
+            result.appendChild(accents);
+        }
+
+        const retryButton = document.createElement('button');
+        retryButton.className = 'secondary-btn';
+        retryButton.textContent = 'Modifier ma réponse';
+        retryButton.onclick = () => {
+            this.evaluation = null;
+            this.flipped = false;
+            this.render();
+        };
+
+        container.append(result, retryButton);
+        return container;
     }
 
     private renderSummary(): HTMLElement {

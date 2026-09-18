@@ -7,6 +7,7 @@ export interface Phrase {
     es: string;
     fr: string;
     topic: string;
+    alternatives?: string[];
 }
 
 export interface CardState {

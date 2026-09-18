@@ -14,8 +14,9 @@ quelques minutes par jour.
 - Chaque carte est présentée dans un **ordre aléatoire**.
 - Une carte commence en mode **reconnaissance** (espagnol devant, traduction
   française derrière). Une fois qu'elle est bien maîtrisée, elle **s'inverse**
-  automatiquement : le français apparaît devant, et c'est à toi de produire la
-  phrase en espagnol avant de retourner la carte.
+  automatiquement : le français apparaît devant, et c'est à toi d'écrire une
+  phrase en espagnol. Une correction locale tolérante vérifie le sens global,
+  le lexique et les formes verbales sans exiger une traduction mot à mot.
 - Après avoir vu la traduction, tu t'auto-évalues avec 4 boutons (raccourcis
   clavier `1`-`4`) : **Encore**, **Difficile**, **Bien**, **Facile**. Cela
   détermine quand la carte reviendra.
