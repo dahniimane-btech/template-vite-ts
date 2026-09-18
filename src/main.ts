@@ -1,7 +1,8 @@
-import StartGame from './game/main';
+import { App } from './app/App';
 
 document.addEventListener('DOMContentLoaded', () => {
 
-    StartGame('game-container');
+    const root = document.getElementById('game-container');
+    if (root) new App(root);
 
 });
