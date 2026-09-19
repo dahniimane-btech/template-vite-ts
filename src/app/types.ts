@@ -18,6 +18,8 @@ export interface CardState {
     introducedDate: string;
     reviewCount: number;
     lastResult: Grade | null;
+    /** Dernier jour où la carte a été notée (absent sur les états anciens). */
+    lastReviewedDate?: string | null;
     mastered: boolean;
 }
 

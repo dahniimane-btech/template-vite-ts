@@ -197,6 +197,14 @@ export class App {
     }
 
     private renderHome(): HTMLElement {
+        // Relancé à chaque retour sur l'accueil : si l'onglet est resté ouvert
+        // après minuit, les nouvelles phrases du jour sont quand même générées.
+        const regenerated = ensureDailyGeneration(this.state);
+        if (regenerated !== this.state) {
+            this.state = regenerated;
+            saveState(this.state);
+        }
+
         const session = buildDailySession(this.state);
         const wrap = document.createElement('div');
         wrap.className = 'view view-home';
@@ -204,7 +212,6 @@ export class App {
         const newCount = session.newCards.length;
         const reviewCount = session.reviewCards.length;
         const writingCount = Math.min(Object.keys(this.state.cards).length, 10);
-        const backlog = Math.max(0, session.reviewDueTotal - reviewCount);
 
         wrap.innerHTML = `
             <h1>Ta séance du jour</h1>
@@ -218,8 +225,11 @@ export class App {
                     <div class="summary-label">à réviser</div>
                 </div>
             </div>
-            ${backlog > 0 ? `<p class="backlog-note">+ ${backlog} révision(s) en attente, réparties sur les prochains jours.</p>` : ''}
-            ${session.bankExhausted ? '<p class="backlog-note">Tu as découvert toutes les phrases de la banque actuelle ! Ajoute-en de nouvelles dans <code>src/app/phrases.ts</code>.</p>' : ''}
+            ${session.yesterdayCount > 0 ? `<p class="backlog-note">Dont ${session.yesterdayCount} phrase(s) découverte(s) hier, à consolider aujourd'hui.</p>` : ''}
+            ${session.backlogLeft > 0 ? `<p class="backlog-note">+ ${session.backlogLeft} révision(s) plus anciennes en attente, réparties sur les prochains jours.</p>` : ''}
+            ${session.bankRemaining === 0
+                ? '<p class="backlog-note">Tu as découvert toutes les phrases de la banque actuelle ! Ajoute-en de nouvelles dans <code>src/app/phrases.ts</code>.</p>'
+                : `<p class="backlog-note">Il reste ${session.bankRemaining} phrase(s) inédite(s) dans la banque, soit environ ${Math.ceil(session.bankRemaining / Math.max(1, this.state.settings.newPerDay))} jour(s) de nouveautés.</p>`}
         `;
 
         const startBtn = document.createElement('button');

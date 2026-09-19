@@ -53,6 +53,7 @@ export function scheduleCard(card: CardState, grade: Grade, today: string): Card
         dueDate,
         reviewCount: card.reviewCount + 1,
         lastResult: grade,
+        lastReviewedDate: today,
         mastered,
     };
 }
@@ -100,30 +101,67 @@ export interface DailySession {
     reviewCards: CardState[];
     newCards: CardState[];
     reviewDueTotal: number;
+    /** Cartes découvertes hier et donc à revoir aujourd'hui. */
+    yesterdayCount: number;
+    /** Arriéré restant après la séance du jour. */
+    backlogLeft: number;
     bankExhausted: boolean;
+    /** Nombre de phrases encore jamais découvertes dans la banque. */
+    bankRemaining: number;
 }
 
-/** Construit la sélection de cartes à étudier aujourd'hui, mélangée aléatoirement. */
+/**
+ * Construit la sélection de cartes à étudier aujourd'hui, mélangée aléatoirement.
+ *
+ * Règles :
+ * - les cartes découvertes aujourd'hui et déjà notées (donc repoussées à
+ *   demain) ne réapparaissent pas si l'on relance une séance le même jour ;
+ * - les phrases découvertes hier sont toujours révisées en priorité, puis on
+ *   complète avec l'arriéré le plus ancien.
+ */
 export function buildDailySession(state: AppState, today: string = todayISO()): DailySession {
     const all = Object.values(state.cards);
+    const yesterday = addDays(today, -1);
 
-    const due = all
-        .filter((c) => c.dueDate <= today && c.introducedDate !== today)
+    const due = all.filter((c) => c.dueDate <= today && c.introducedDate !== today);
+
+    const fromYesterday = due.filter((c) => c.introducedDate === yesterday);
+    const backlog = due
+        .filter((c) => c.introducedDate !== yesterday)
         .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1));
 
-    const introducedToday = all.filter((c) => c.introducedDate === today);
+    // Quota d'arriéré déjà consommé aujourd'hui : le plan du jour reste stable
+    // même si l'utilisateur relance une séance après l'avoir terminée.
+    const backlogDoneToday = all.filter(
+        (c) =>
+            c.lastReviewedDate === today &&
+            c.introducedDate !== today &&
+            c.introducedDate !== yesterday,
+    ).length;
 
-    const reviewCards = shuffle(due.slice(0, state.settings.reviewPerDay));
+    // Les phrases de J-1 sont garanties : la limite quotidienne ne peut pas
+    // les tronquer, elle sert seulement à doser l'arriéré plus ancien.
+    const backlogSlots = Math.max(0, state.settings.reviewPerDay - backlogDoneToday);
+    const selectedReviews = [...fromYesterday, ...backlog.slice(0, backlogSlots)];
+
+    const introducedToday = all.filter(
+        (c) => c.introducedDate === today && c.dueDate <= today,
+    );
+
+    const reviewCards = shuffle(selectedReviews);
     const newCards = shuffle(introducedToday.slice(0, state.settings.newPerDay));
 
     const introducedIds = new Set(Object.keys(state.cards));
-    const bankExhausted = PHRASES.every((p) => introducedIds.has(p.id));
+    const bankRemaining = PHRASES.filter((p) => !introducedIds.has(p.id)).length;
 
     return {
         reviewCards,
         newCards,
         reviewDueTotal: due.length,
-        bankExhausted,
+        yesterdayCount: fromYesterday.length,
+        backlogLeft: Math.max(0, backlog.length - backlogSlots),
+        bankExhausted: bankRemaining === 0,
+        bankRemaining,
     };
 }
 
