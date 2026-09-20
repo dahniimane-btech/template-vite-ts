@@ -25,6 +25,8 @@ export interface TranslationEvaluation {
     level: EvaluationLevel;
     score: number;
     reference: string;
+    /** True si la réponse correcte diverge nettement de la formulation de référence. */
+    isAlternativePhrasing: boolean;
     missingWords: string[];
     extraWords: string[];
     conjugationIssues: ConjugationIssue[];
@@ -398,8 +400,15 @@ export function evaluateTranslation(answer: string, phrase: Phrase): Translation
         level = 'retry';
     }
 
+    // Une réponse correcte est jugée "alternative" quand elle ne reprend pas
+    // mot pour mot la proposition de référence : autre ordre, synonyme, tournure
+    // différente. Dans ce cas on l'accepte sans la corriger.
+    const isAlternativePhrasing = level === 'correct' && answerWithoutAccents !== referenceWithoutAccents;
+
     const summary = level === 'correct'
-        ? 'Très bien : le sens, le lexique et les formes verbales sont cohérents.'
+        ? isAlternativePhrasing
+            ? 'Très bien : ta formulation est différente mais la conjugaison et le lexique sont corrects, donc elle est acceptée.'
+            : 'Très bien : le sens, le lexique et les formes verbales sont cohérents.'
         : level === 'close'
             ? 'Bonne idée générale, mais quelques éléments sont à corriger.'
             : 'La réponse est encore trop éloignée : compare-la avec la proposition.';
@@ -408,6 +417,7 @@ export function evaluateTranslation(answer: string, phrase: Phrase): Translation
         level,
         score: Math.round(scored.score * 100),
         reference: scored.reference,
+        isAlternativePhrasing,
         missingWords: scored.missingWords.slice(0, 5),
         extraWords: scored.extraWords.slice(0, 5),
         conjugationIssues,

@@ -449,10 +449,16 @@ export class App {
 
         const referenceLine = document.createElement('p');
         referenceLine.className = 'reference-line';
-        referenceLine.textContent = `Proposition : ${this.evaluation.reference}`;
+        if (this.evaluation.level === 'correct') {
+            referenceLine.textContent = this.evaluation.isAlternativePhrasing
+                ? `Voici ce que je propose aussi : ${this.evaluation.reference}`
+                : `Correspond à : ${this.evaluation.reference}`;
+        } else {
+            referenceLine.textContent = `Proposition : ${this.evaluation.reference}`;
+        }
         result.appendChild(referenceLine);
 
-        if (this.evaluation.conjugationIssues.length > 0) {
+        if (this.evaluation.level !== 'correct' && this.evaluation.conjugationIssues.length > 0) {
             const section = document.createElement('div');
             section.className = 'feedback-section';
             const title = document.createElement('h3');
@@ -485,7 +491,7 @@ export class App {
             });
             result.appendChild(section);
         }
-        if (this.evaluation.spellingIssues.length > 0) {
+        if (this.evaluation.level !== 'correct' && this.evaluation.spellingIssues.length > 0) {
             const section = document.createElement('div');
             section.className = 'feedback-section';
             const title = document.createElement('h3');
@@ -503,7 +509,7 @@ export class App {
             section.appendChild(list);
             result.appendChild(section);
         }
-        if (this.evaluation.missingWords.length > 0) {
+        if (this.evaluation.level !== 'correct' && this.evaluation.missingWords.length > 0) {
             const missingLexicon = this.evaluation.missingWords.filter((word) =>
                 !this.evaluation?.conjugationIssues.some((issue) => issue.expected.form === word));
             if (missingLexicon.length > 0) {
@@ -529,7 +535,7 @@ export class App {
             section.append(title, detail);
             result.appendChild(section);
         }
-        if (this.evaluation.accentWarning && this.evaluation.spellingIssues.length === 0) {
+        if (this.evaluation.level !== 'correct' && this.evaluation.accentWarning && this.evaluation.spellingIssues.length === 0) {
             const accents = document.createElement('p');
             accents.textContent = 'Le sens est bon, mais vérifie les accents écrits.';
             result.appendChild(accents);
