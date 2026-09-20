@@ -55,10 +55,14 @@ export class App {
         this.render();
     }
 
-    private startSession(): void {
+    private startSession(scope: 'all' | 'new' | 'review' = 'all'): void {
         const session: DailySession = buildDailySession(this.state);
         this.sessionKind = 'daily';
-        this.queue = shuffle([...session.reviewCards, ...session.newCards]);
+        const picked =
+            scope === 'new' ? session.newCards
+            : scope === 'review' ? session.reviewCards
+            : [...session.reviewCards, ...session.newCards];
+        this.queue = shuffle(picked);
         this.resetSession();
     }
 
@@ -142,6 +146,11 @@ export class App {
     private onKeyDown(e: KeyboardEvent): void {
         if (this.view !== 'session') return;
         const target = e.target as HTMLElement | null;
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            this.leaveSession();
+            return;
+        }
         if (target?.tagName === 'TEXTAREA' || target?.tagName === 'INPUT') return;
         if (!this.flipped) {
             if (e.code === 'Space' || e.code === 'Enter') {
@@ -192,8 +201,35 @@ export class App {
         gear.title = 'Réglages';
         gear.onclick = () => { this.view = this.view === 'settings' ? 'home' : 'settings'; this.render(); };
 
-        header.append(title, stats, gear);
+        if (this.view === 'home') {
+            header.append(title, stats, gear);
+            return header;
+        }
+
+        // Hors accueil, une flèche permet d'abandonner la séance en cours pour
+        // revenir choisir un autre type d'entraînement.
+        const back = document.createElement('button');
+        back.className = 'icon-btn back-btn';
+        back.textContent = '←';
+        back.title = 'Retour à l\'accueil';
+        back.setAttribute('aria-label', 'Retour à l\'accueil');
+        back.onclick = () => this.leaveSession();
+
+        header.append(back, title, stats, gear);
         return header;
+    }
+
+    /**
+     * Quitte la vue courante pour revenir à l'accueil. La progression déjà
+     * notée reste enregistrée ; seules les cartes non vues sont abandonnées.
+     */
+    private leaveSession(): void {
+        this.queue = [];
+        this.queueIndex = 0;
+        this.flipped = false;
+        this.productionAnswer = '';
+        this.evaluation = null;
+        this.goHome();
     }
 
     private renderHome(): HTMLElement {
@@ -236,9 +272,29 @@ export class App {
         startBtn.className = 'primary-btn';
         startBtn.textContent = newCount + reviewCount > 0 ? 'Commencer la séance' : 'Rien à étudier aujourd\'hui 🎉';
         startBtn.disabled = newCount + reviewCount === 0;
-        startBtn.onclick = () => this.startSession();
+        startBtn.onclick = () => this.startSession('all');
 
         wrap.appendChild(startBtn);
+
+        // Démarrages ciblés : permet de basculer entre révision et nouveautés
+        // sans devoir terminer la séance complète.
+        const scopeRow = document.createElement('div');
+        scopeRow.className = 'scope-row';
+
+        const reviewBtn = document.createElement('button');
+        reviewBtn.className = 'secondary-btn';
+        reviewBtn.textContent = `🔁 Réviser seulement (${reviewCount})`;
+        reviewBtn.disabled = reviewCount === 0;
+        reviewBtn.onclick = () => this.startSession('review');
+
+        const newBtn = document.createElement('button');
+        newBtn.className = 'secondary-btn';
+        newBtn.textContent = `✨ Nouvelles phrases (${newCount})`;
+        newBtn.disabled = newCount === 0;
+        newBtn.onclick = () => this.startSession('new');
+
+        scopeRow.append(reviewBtn, newBtn);
+        wrap.appendChild(scopeRow);
 
         const writingBtn = document.createElement('button');
         writingBtn.className = 'secondary-btn writing-start-btn';

@@ -64,6 +64,25 @@ body {
     background: rgba(255, 255, 255, 0.16);
 }
 
+.back-btn {
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* Démarrages ciblés (réviser seulement / nouvelles phrases). */
+.scope-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    width: 100%;
+}
+
+.scope-row .secondary-btn {
+    flex: 1 1 180px;
+}
+
 .view {
     display: flex;
     flex-direction: column;
