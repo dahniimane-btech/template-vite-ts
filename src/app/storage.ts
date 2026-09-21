@@ -5,6 +5,7 @@ const STORAGE_KEY = 'esapp_v1';
 export const DEFAULT_SETTINGS = {
     newPerDay: 20,
     reviewPerDay: 10,
+    writingPerDay: 20,
 };
 
 function defaultState(): AppState {

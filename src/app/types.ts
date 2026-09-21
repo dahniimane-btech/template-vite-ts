@@ -26,6 +26,7 @@ export interface CardState {
 export interface Settings {
     newPerDay: number;
     reviewPerDay: number;
+    writingPerDay: number;
 }
 
 export interface HistoryEntry {

@@ -110,6 +110,49 @@ export interface DailySession {
     bankRemaining: number;
 }
 
+export interface WritingSession {
+    cards: CardState[];
+    byDay: Array<{ date: string; count: number }>;
+}
+
+/**
+ * Sélectionne jusqu'à 10 cartes par journée d'introduction, de J vers J-n.
+ * Le quota par date garantit 10 phrases de J et 10 de J-1 par défaut, puis
+ * étend progressivement la sélection aux jours précédents.
+ */
+export function buildWritingSession(
+    state: AppState,
+    today: string = todayISO(),
+): WritingSession {
+    const limit = Math.max(0, state.settings.writingPerDay);
+    const cardsByDate = new Map<string, CardState[]>();
+
+    Object.values(state.cards)
+        .filter((card) => card.introducedDate <= today)
+        .forEach((card) => {
+            const cards = cardsByDate.get(card.introducedDate) ?? [];
+            cards.push(card);
+            cardsByDate.set(card.introducedDate, cards);
+        });
+
+    const cards: CardState[] = [];
+    const byDay: Array<{ date: string; count: number }> = [];
+    const dates = [...cardsByDate.keys()].sort((a, b) => b.localeCompare(a));
+
+    for (const date of dates) {
+        const remaining = limit - cards.length;
+        if (remaining <= 0) break;
+
+        const selected = (cardsByDate.get(date) ?? []).slice(0, Math.min(10, remaining));
+        if (selected.length > 0) {
+            cards.push(...selected);
+            byDay.push({ date, count: selected.length });
+        }
+    }
+
+    return { cards, byDay };
+}
+
 /**
  * Construit la sélection de cartes à étudier aujourd'hui, mélangée aléatoirement.
  *

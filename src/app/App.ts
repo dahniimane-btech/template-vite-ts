@@ -1,6 +1,14 @@
 import type { AppState, CardState, Grade } from './types';
 import { loadState, saveState } from './storage';
-import { ensureDailyGeneration, buildDailySession, scheduleCard, getPhrase, totalMastered, shuffle } from './srs';
+import {
+    ensureDailyGeneration,
+    buildDailySession,
+    buildWritingSession,
+    scheduleCard,
+    getPhrase,
+    totalMastered,
+    shuffle,
+} from './srs';
 import { addDays, todayISO } from './date';
 import type { DailySession } from './srs';
 import { evaluateTranslation } from './evaluator';
@@ -68,7 +76,7 @@ export class App {
 
     private startWritingSession(): void {
         this.sessionKind = 'writing';
-        this.queue = shuffle(Object.values(this.state.cards)).slice(0, 10);
+        this.queue = shuffle(buildWritingSession(this.state).cards);
         this.resetSession();
     }
 
@@ -247,7 +255,13 @@ export class App {
 
         const newCount = session.newCards.length;
         const reviewCount = session.reviewCards.length;
-        const writingCount = Math.min(Object.keys(this.state.cards).length, 10);
+        const writingSession = buildWritingSession(this.state);
+        const writingCount = writingSession.cards.length;
+        const today = todayISO();
+        const todayWritingCount = writingSession.byDay.find((entry) => entry.date === today)?.count ?? 0;
+        const yesterdayWritingCount = writingSession.byDay.find(
+            (entry) => entry.date === addDays(today, -1),
+        )?.count ?? 0;
 
         wrap.innerHTML = `
             <h1>Ta séance du jour</h1>
@@ -307,7 +321,10 @@ export class App {
 
         const writingHelp = document.createElement('p');
         writingHelp.className = 'writing-help';
-        writingHelp.textContent = 'Disponible dès le premier jour, sans attendre que les cartes soient maîtrisées.';
+        writingHelp.textContent = writingCount > 0
+            ? `${todayWritingCount} de J + ${yesterdayWritingCount} de J-1`
+                + (writingSession.byDay.length > 2 ? ' + complément des jours précédents.' : '.')
+            : 'Disponible dès le premier jour, sans attendre que les cartes soient maîtrisées.';
         wrap.appendChild(writingHelp);
         return wrap;
     }
@@ -606,7 +623,28 @@ export class App {
         };
         revRow.appendChild(revInput);
 
-        wrap.append(newRow, revRow);
+        const writingRow = document.createElement('label');
+        writingRow.className = 'settings-row';
+        writingRow.innerHTML = `<span>Phrases à pratiquer FR → ES / jour</span>`;
+        const writingInput = document.createElement('input');
+        writingInput.type = 'number';
+        writingInput.min = '20';
+        writingInput.max = '200';
+        writingInput.step = '5';
+        writingInput.value = String(this.state.settings.writingPerDay);
+        writingInput.onchange = () => {
+            const requested = Number(writingInput.value) || 20;
+            this.state.settings.writingPerDay = Math.min(200, Math.max(20, requested));
+            writingInput.value = String(this.state.settings.writingPerDay);
+            this.persist();
+        };
+        writingRow.appendChild(writingInput);
+
+        const writingHelp = document.createElement('p');
+        writingHelp.className = 'settings-help';
+        writingHelp.textContent = '20 = 10 phrases de J + 10 de J-1. Au-delà, le complément est pris dans J-2, J-3, etc.';
+
+        wrap.append(newRow, revRow, writingRow, writingHelp);
 
         const backBtn = document.createElement('button');
         backBtn.className = 'primary-btn';
