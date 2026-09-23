@@ -424,3 +424,7 @@ body {
     font-size: 0.85rem;
     line-height: 1.45;
 }
+
+.change-selection-btn:not(:disabled) {
+    border: 1px dashed rgba(255, 255, 255, 0.35);
+}

@@ -74,6 +74,9 @@ function newCard(phraseId: string, today: string): CardState {
 /**
  * S'assure que les nouvelles cartes du jour ont été générées (une seule fois
  * par jour). Ajoute jusqu'à `settings.newPerDay` phrases jamais vues.
+ *
+ * Le tirage est aléatoire : sur un appareil neuf on ne retombe donc pas
+ * systématiquement sur les premières phrases de la banque.
  */
 export function ensureDailyGeneration(state: AppState, today: string = todayISO()): AppState {
     if (state.lastGenerationDate === today) {
@@ -82,7 +85,7 @@ export function ensureDailyGeneration(state: AppState, today: string = todayISO(
 
     const introducedIds = new Set(Object.keys(state.cards));
     const remaining = PHRASES.filter((p) => !introducedIds.has(p.id));
-    const toAdd = remaining.slice(0, state.settings.newPerDay);
+    const toAdd = shuffle(remaining).slice(0, state.settings.newPerDay);
 
     const cards = { ...state.cards };
     for (const phrase of toAdd) {
@@ -95,6 +98,41 @@ export function ensureDailyGeneration(state: AppState, today: string = todayISO(
         lastGenerationDate: today,
         nextPhraseIndex: state.nextPhraseIndex + toAdd.length,
     };
+}
+
+/**
+ * Remplace les phrases du jour encore jamais notées par d'autres phrases
+ * inédites tirées au hasard. Les cartes déjà étudiées aujourd'hui et tout
+ * l'historique de révision sont préservés.
+ */
+export function rerollDailyNewCards(state: AppState, today: string = todayISO()): AppState {
+    const untouched = Object.values(state.cards).filter(
+        (card) => card.introducedDate === today && card.reviewCount === 0,
+    );
+    if (untouched.length === 0) return state;
+
+    const discardedIds = new Set(untouched.map((card) => card.id));
+    const cards = { ...state.cards };
+    for (const id of discardedIds) delete cards[id];
+
+    // On exclut les phrases qu'on vient de retirer pour garantir une
+    // sélection réellement différente.
+    const keptIds = new Set(Object.keys(cards));
+    const pool = PHRASES.filter((p) => !keptIds.has(p.id) && !discardedIds.has(p.id));
+    const replacements = shuffle(pool).slice(0, untouched.length);
+
+    // Banque épuisée : on recycle les phrases écartées plutôt que de rendre
+    // la séance vide.
+    const fallback = replacements.length < untouched.length
+        ? shuffle(PHRASES.filter((p) => discardedIds.has(p.id)))
+            .slice(0, untouched.length - replacements.length)
+        : [];
+
+    for (const phrase of [...replacements, ...fallback]) {
+        cards[phrase.id] = newCard(phrase.id, today);
+    }
+
+    return { ...state, cards };
 }
 
 export interface DailySession {
@@ -113,18 +151,33 @@ export interface DailySession {
 export interface WritingSession {
     cards: CardState[];
     byDay: Array<{ date: string; count: number }>;
+    /** Nombre de listes différentes disponibles avec le quota courant. */
+    variantCount: number;
+}
+
+/** Prend `count` éléments à partir d'un décalage, en bouclant sur la liste. */
+function rotateSlice<T>(items: T[], count: number, rotation: number): T[] {
+    if (items.length === 0 || count <= 0) return [];
+    const take = Math.min(count, items.length);
+    const start = ((rotation * take) % items.length + items.length) % items.length;
+    return Array.from({ length: take }, (_, i) => items[(start + i) % items.length]);
 }
 
 /**
  * Sélectionne jusqu'à 10 cartes par journée d'introduction, de J vers J-n.
  * Le quota par date garantit 10 phrases de J et 10 de J-1 par défaut, puis
  * étend progressivement la sélection aux jours précédents.
+ *
+ * `writingRotation` permet de faire défiler les phrases d'une même journée
+ * sans avoir à les étudier : utile quand la première sélection est déjà
+ * maîtrisée sur un autre appareil.
  */
 export function buildWritingSession(
     state: AppState,
     today: string = todayISO(),
 ): WritingSession {
     const limit = Math.max(0, state.settings.writingPerDay);
+    const rotation = state.writingRotation ?? 0;
     const cardsByDate = new Map<string, CardState[]>();
 
     Object.values(state.cards)
@@ -138,19 +191,23 @@ export function buildWritingSession(
     const cards: CardState[] = [];
     const byDay: Array<{ date: string; count: number }> = [];
     const dates = [...cardsByDate.keys()].sort((a, b) => b.localeCompare(a));
+    let variantCount = 1;
 
     for (const date of dates) {
         const remaining = limit - cards.length;
         if (remaining <= 0) break;
 
-        const selected = (cardsByDate.get(date) ?? []).slice(0, Math.min(10, remaining));
+        const dayCards = cardsByDate.get(date) ?? [];
+        const take = Math.min(10, remaining);
+        const selected = rotateSlice(dayCards, take, rotation);
         if (selected.length > 0) {
             cards.push(...selected);
             byDay.push({ date, count: selected.length });
+            variantCount = Math.max(variantCount, Math.ceil(dayCards.length / take));
         }
     }
 
-    return { cards, byDay };
+    return { cards, byDay, variantCount };
 }
 
 /**

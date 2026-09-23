@@ -42,4 +42,6 @@ export interface AppState {
     lastStudyDate: string | null;
     settings: Settings;
     history: HistoryEntry[];
+    /** Décalage de la liste d'entraînement écrit (absent sur les états anciens). */
+    writingRotation?: number;
 }

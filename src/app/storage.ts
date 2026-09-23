@@ -17,6 +17,7 @@ function defaultState(): AppState {
         lastStudyDate: null,
         settings: { ...DEFAULT_SETTINGS },
         history: [],
+        writingRotation: 0,
     };
 }
 

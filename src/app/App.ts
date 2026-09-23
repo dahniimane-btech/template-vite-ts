@@ -4,6 +4,7 @@ import {
     ensureDailyGeneration,
     buildDailySession,
     buildWritingSession,
+    rerollDailyNewCards,
     scheduleCard,
     getPhrase,
     totalMastered,
@@ -78,6 +79,19 @@ export class App {
         this.sessionKind = 'writing';
         this.queue = shuffle(buildWritingSession(this.state).cards);
         this.resetSession();
+    }
+
+    /**
+     * Change la sélection du jour sans rien étudier : tire de nouvelles
+     * phrases inédites et fait défiler la liste d'entraînement écrit.
+     * Utile quand on arrive sur un appareil où la sélection initiale est
+     * déjà maîtrisée ailleurs.
+     */
+    private changeSelection(): void {
+        this.state = rerollDailyNewCards(this.state);
+        this.state.writingRotation = (this.state.writingRotation ?? 0) + 1;
+        this.persist();
+        this.render();
     }
 
     private resetSession(): void {
@@ -309,6 +323,26 @@ export class App {
 
         scopeRow.append(reviewBtn, newBtn);
         wrap.appendChild(scopeRow);
+
+        const untouchedToday = Object.values(this.state.cards).filter(
+            (card) => card.introducedDate === today && card.reviewCount === 0,
+        ).length;
+        const canChange = untouchedToday > 0 || writingSession.variantCount > 1;
+
+        const changeBtn = document.createElement('button');
+        changeBtn.className = 'secondary-btn change-selection-btn';
+        changeBtn.textContent = '🔄 Changer la liste';
+        changeBtn.title = 'Tirer d\'autres phrases sans avoir à étudier celles-ci';
+        changeBtn.disabled = !canChange;
+        changeBtn.onclick = () => this.changeSelection();
+        wrap.appendChild(changeBtn);
+
+        const changeHelp = document.createElement('p');
+        changeHelp.className = 'writing-help';
+        changeHelp.textContent = canChange
+            ? 'Remplace les phrases du jour non encore étudiées et fait défiler la liste écrite. Ta progression est conservée.'
+            : 'Étudie ou ajoute des phrases pour pouvoir changer la sélection.';
+        wrap.appendChild(changeHelp);
 
         const writingBtn = document.createElement('button');
         writingBtn.className = 'secondary-btn writing-start-btn';
