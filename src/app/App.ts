@@ -272,10 +272,6 @@ export class App {
         const writingSession = buildWritingSession(this.state);
         const writingCount = writingSession.cards.length;
         const today = todayISO();
-        const todayWritingCount = writingSession.byDay.find((entry) => entry.date === today)?.count ?? 0;
-        const yesterdayWritingCount = writingSession.byDay.find(
-            (entry) => entry.date === addDays(today, -1),
-        )?.count ?? 0;
 
         wrap.innerHTML = `
             <h1>Ta séance du jour</h1>
@@ -289,7 +285,7 @@ export class App {
                     <div class="summary-label">à réviser</div>
                 </div>
             </div>
-            ${session.yesterdayCount > 0 ? `<p class="backlog-note">Dont ${session.yesterdayCount} phrase(s) découverte(s) hier, à consolider aujourd'hui.</p>` : ''}
+            ${session.yesterdayCount > 0 ? `<p class="backlog-note">Dont ${session.yesterdayCount} phrase(s) de ta dernière liste (J-1), à consolider aujourd'hui.</p>` : ''}
             ${session.backlogLeft > 0 ? `<p class="backlog-note">+ ${session.backlogLeft} révision(s) plus anciennes en attente, réparties sur les prochains jours.</p>` : ''}
             ${session.bankRemaining === 0
                 ? '<p class="backlog-note">Tu as découvert toutes les phrases de la banque actuelle ! Ajoute-en de nouvelles dans <code>src/app/phrases.ts</code>.</p>'
@@ -356,8 +352,7 @@ export class App {
         const writingHelp = document.createElement('p');
         writingHelp.className = 'writing-help';
         writingHelp.textContent = writingCount > 0
-            ? `${todayWritingCount} de J + ${yesterdayWritingCount} de J-1`
-                + (writingSession.byDay.length > 2 ? ' + complément des jours précédents.' : '.')
+            ? writingSession.byDay.map((entry) => `${entry.count} de ${entry.label}`).join(' + ') + '.'
             : 'Disponible dès le premier jour, sans attendre que les cartes soient maîtrisées.';
         wrap.appendChild(writingHelp);
         return wrap;
@@ -676,7 +671,7 @@ export class App {
 
         const writingHelp = document.createElement('p');
         writingHelp.className = 'settings-help';
-        writingHelp.textContent = '20 = 10 phrases de J + 10 de J-1. Au-delà, le complément est pris dans J-2, J-3, etc.';
+        writingHelp.textContent = '20 = mélange de J-1, J-2 et J-3 (7 + 7 + 6). Au-delà, le complément est pris dans J-4, J-5, etc. Un jour sans connexion ne compte pas : J-1 = ta dernière liste étudiée.';
 
         wrap.append(newRow, revRow, writingRow, writingHelp);
 

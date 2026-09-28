@@ -73,21 +73,31 @@ function newCard(phraseId: string, today: string): CardState {
 
 /**
  * S'assure que les nouvelles cartes du jour ont été générées (une seule fois
- * par jour). Ajoute jusqu'à `settings.newPerDay` phrases jamais vues.
+ * par jour).
  *
- * Le tirage est aléatoire : sur un appareil neuf on ne retombe donc pas
- * systématiquement sur les premières phrases de la banque.
+ * Les phrases d'une liste précédente jamais étudiées sont reportées telles
+ * quelles : si l'on ne se connecte pas un jour, on retrouve le lendemain la
+ * liste qu'on aurait dû voir. On complète ensuite, au hasard, jusqu'à
+ * `settings.newPerDay` phrases.
  */
 export function ensureDailyGeneration(state: AppState, today: string = todayISO()): AppState {
     if (state.lastGenerationDate === today) {
         return state;
     }
 
-    const introducedIds = new Set(Object.keys(state.cards));
-    const remaining = PHRASES.filter((p) => !introducedIds.has(p.id));
-    const toAdd = shuffle(remaining).slice(0, state.settings.newPerDay);
-
     const cards = { ...state.cards };
+    const pending = Object.values(cards).filter(
+        (card) => card.reviewCount === 0 && card.introducedDate < today,
+    );
+    for (const card of pending) {
+        cards[card.id] = { ...card, introducedDate: today, dueDate: today };
+    }
+
+    const introducedIds = new Set(Object.keys(cards));
+    const remaining = PHRASES.filter((p) => !introducedIds.has(p.id));
+    const missing = Math.max(0, state.settings.newPerDay - pending.length);
+    const toAdd = shuffle(remaining).slice(0, missing);
+
     for (const phrase of toAdd) {
         cards[phrase.id] = newCard(phrase.id, today);
     }
@@ -150,7 +160,8 @@ export interface DailySession {
 
 export interface WritingSession {
     cards: CardState[];
-    byDay: Array<{ date: string; count: number }>;
+    /** `label` = rang du jour d'apprentissage (J-1 = dernière liste étudiée). */
+    byDay: Array<{ date: string; label: string; count: number }>;
     /** Nombre de listes différentes disponibles avec le quota courant. */
     variantCount: number;
 }
@@ -164,13 +175,26 @@ function rotateSlice<T>(items: T[], count: number, rotation: number): T[] {
 }
 
 /**
- * Sélectionne jusqu'à 10 cartes par journée d'introduction, de J vers J-n.
- * Le quota par date garantit 10 phrases de J et 10 de J-1 par défaut, puis
- * étend progressivement la sélection aux jours précédents.
+ * Dates des listes précédentes (jours d'apprentissage réels), de la plus
+ * récente à la plus ancienne. Un jour sans connexion n'y figure pas : J-1
+ * désigne donc toujours la dernière liste étudiée.
+ */
+export function previousBatchDates(state: AppState, today: string = todayISO()): string[] {
+    const dates = new Set<string>();
+    for (const card of Object.values(state.cards)) {
+        if (card.introducedDate < today) dates.add(card.introducedDate);
+    }
+    return [...dates].sort((a, b) => b.localeCompare(a));
+}
+
+/**
+ * Entraînement FR → ES : mélange équilibré des listes J-1, J-2 et J-3
+ * (7 + 7 + 6 pour 20 phrases). Si le quota dépasse ce qu'elles contiennent,
+ * on complète avec J-4, J-5… Le premier jour, faute d'historique, on
+ * s'entraîne sur la liste du jour.
  *
- * `writingRotation` permet de faire défiler les phrases d'une même journée
- * sans avoir à les étudier : utile quand la première sélection est déjà
- * maîtrisée sur un autre appareil.
+ * `writingRotation` fait défiler les phrases de chaque liste sans avoir à les
+ * étudier (bouton « Changer la liste »).
  */
 export function buildWritingSession(
     state: AppState,
@@ -188,24 +212,46 @@ export function buildWritingSession(
             cardsByDate.set(card.introducedDate, cards);
         });
 
+    let dates = previousBatchDates(state, today);
+    const fallbackToday = dates.length === 0;
+    if (fallbackToday) dates = cardsByDate.has(today) ? [today] : [];
+
+    const size = (date: string) => cardsByDate.get(date)?.length ?? 0;
+    const alloc = new Map<string, number>();
+    let remaining = limit;
+
+    // Répartition équitable entre les trois dernières listes ; ce qu'une
+    // liste trop courte ne peut pas fournir est reporté sur les autres.
+    let active = dates.slice(0, 3).filter((date) => size(date) > 0);
+    while (remaining > 0 && active.length > 0) {
+        const share = Math.ceil(remaining / active.length);
+        for (const date of active) {
+            const give = Math.min(share, size(date) - (alloc.get(date) ?? 0), remaining);
+            alloc.set(date, (alloc.get(date) ?? 0) + give);
+            remaining -= give;
+        }
+        active = active.filter((date) => (alloc.get(date) ?? 0) < size(date));
+    }
+    for (const date of dates.slice(3)) {
+        if (remaining <= 0) break;
+        const give = Math.min(size(date), remaining);
+        if (give > 0) alloc.set(date, give);
+        remaining -= give;
+    }
+
     const cards: CardState[] = [];
-    const byDay: Array<{ date: string; count: number }> = [];
-    const dates = [...cardsByDate.keys()].sort((a, b) => b.localeCompare(a));
+    const byDay: WritingSession['byDay'] = [];
     let variantCount = 1;
 
-    for (const date of dates) {
-        const remaining = limit - cards.length;
-        if (remaining <= 0) break;
-
+    dates.forEach((date, index) => {
+        const take = alloc.get(date) ?? 0;
+        if (take <= 0) return;
         const dayCards = cardsByDate.get(date) ?? [];
-        const take = Math.min(10, remaining);
         const selected = rotateSlice(dayCards, take, rotation);
-        if (selected.length > 0) {
-            cards.push(...selected);
-            byDay.push({ date, count: selected.length });
-            variantCount = Math.max(variantCount, Math.ceil(dayCards.length / take));
-        }
-    }
+        cards.push(...selected);
+        byDay.push({ date, label: fallbackToday ? 'J' : `J-${index + 1}`, count: selected.length });
+        variantCount = Math.max(variantCount, Math.ceil(dayCards.length / take));
+    });
 
     return { cards, byDay, variantCount };
 }
@@ -221,7 +267,9 @@ export function buildWritingSession(
  */
 export function buildDailySession(state: AppState, today: string = todayISO()): DailySession {
     const all = Object.values(state.cards);
-    const yesterday = addDays(today, -1);
+    // Dernière liste étudiée (et non la date d'hier) : si l'on saute un jour,
+    // les révisions prévues ne sont pas perdues.
+    const yesterday = previousBatchDates(state, today)[0] ?? addDays(today, -1);
 
     const due = all.filter((c) => c.dueDate <= today && c.introducedDate !== today);
 
