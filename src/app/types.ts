@@ -21,6 +21,10 @@ export interface CardState {
     /** Dernier jour où la carte a été notée (absent sur les états anciens). */
     lastReviewedDate?: string | null;
     mastered: boolean;
+    /** Planning propre à l'entraînement écrit (FR -> ES), piloté par le ressenti. */
+    writingBox?: number;
+    writingDue?: string | null;
+    writingLastResult?: Grade | null;
 }
 
 export interface Settings {

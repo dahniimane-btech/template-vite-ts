@@ -21,6 +21,11 @@ export function scheduleCard(card: CardState, grade: Grade, today: string): Card
     let box = card.box;
     let direction = card.direction;
 
+    // Fréquence de retour selon le ressenti :
+    // - Encore    : revue plus tard dans la séance, puis dès demain (boîte 0) ;
+    // - Difficile : demain, sans progresser ;
+    // - Bien      : intervalle normal de la boîte suivante (1, 2, 4, 7… jours) ;
+    // - Facile    : saute une boîte et allonge l'intervalle de 50 %.
     if (grade === 'again') {
         // Si l'utilisateur échoue en mode production (FR -> ES), on revient
         // en mode reconnaissance (ES -> FR) pour consolider avant de retenter.
@@ -30,11 +35,9 @@ export function scheduleCard(card: CardState, grade: Grade, today: string): Card
         } else {
             box = 0;
         }
-    } else if (grade === 'hard') {
-        box = clampBox(box - 1);
     } else if (grade === 'good') {
         box = clampBox(box + 1);
-    } else {
+    } else if (grade === 'easy') {
         box = clampBox(box + 2);
     }
 
@@ -43,8 +46,11 @@ export function scheduleCard(card: CardState, grade: Grade, today: string): Card
         direction = 'fr-es';
     }
 
-    const interval = grade === 'again' ? 0 : BOX_INTERVALS[box];
-    const dueDate = addDays(today, Math.max(interval, grade === 'again' ? 0 : 1));
+    const interval =
+        grade === 'again' || grade === 'hard' ? 1
+        : grade === 'easy' ? Math.ceil(BOX_INTERVALS[box] * 1.5)
+        : BOX_INTERVALS[box];
+    const dueDate = addDays(today, Math.max(1, interval));
 
     return {
         ...card,
@@ -55,6 +61,30 @@ export function scheduleCard(card: CardState, grade: Grade, today: string): Card
         lastResult: grade,
         lastReviewedDate: today,
         mastered,
+    };
+}
+
+// Intervalles (jours) de l'entraînement écrit, par niveau de maîtrise.
+const WRITING_INTERVALS = [1, 2, 4, 7, 14, 30];
+
+/**
+ * Planifie le prochain exercice écrit d'une carte selon le ressenti :
+ * Encore / Difficile -> demain, Bien -> niveau suivant, Facile -> saute un niveau.
+ */
+export function scheduleWriting(card: CardState, grade: Grade, today: string): CardState {
+    const max = WRITING_INTERVALS.length - 1;
+    let level = card.writingBox ?? 0;
+    if (grade === 'again') level = 0;
+    else if (grade === 'hard') level = Math.max(0, level - 1);
+    else if (grade === 'good') level = Math.min(max, level + 1);
+    else level = Math.min(max, level + 2);
+
+    const days = grade === 'again' || grade === 'hard' ? 1 : WRITING_INTERVALS[level];
+    return {
+        ...card,
+        writingBox: level,
+        writingDue: addDays(today, days),
+        writingLastResult: grade,
     };
 }
 
@@ -188,8 +218,10 @@ export function previousBatchDates(state: AppState, today: string = todayISO()):
 }
 
 /**
- * Entraînement FR → ES : mélange équilibré des listes J-1, J-2 et J-3
- * (7 + 7 + 6 pour 20 phrases). Si le quota dépasse ce qu'elles contiennent,
+ * Entraînement FR → ES : d'abord les phrases jugées « Encore » / « Difficile »
+ * arrivées à échéance, puis un mélange équilibré des listes J-1, J-2 et J-3
+ * (7 + 7 + 6 pour 20 phrases). Les phrases dont le prochain exercice est
+ * planifié plus tard (Bien / Facile) sont écartées jusqu'à leur date. Si le quota dépasse ce qu'elles contiennent,
  * on complète avec J-4, J-5… Le premier jour, faute d'historique, on
  * s'entraîne sur la liste du jour.
  *
@@ -204,8 +236,22 @@ export function buildWritingSession(
     const rotation = state.writingRotation ?? 0;
     const cardsByDate = new Map<string, CardState[]>();
 
-    Object.values(state.cards)
-        .filter((card) => card.introducedDate <= today)
+    // Le ressenti donné à l'écrit pilote la fréquence : une carte n'est
+    // proposée qu'à partir de sa date prévue (Facile = plus espacée).
+    const available = Object.values(state.cards).filter(
+        (card) => card.introducedDate <= today && (!card.writingDue || card.writingDue <= today),
+    );
+
+    // Les phrases jugées « Encore » ou « Difficile » reviennent en priorité,
+    // dans la limite de la moitié du quota pour garder le mélange J-1/J-2/J-3.
+    const priority = available
+        .filter((card) => card.writingLastResult === 'again' || card.writingLastResult === 'hard')
+        .sort((a, b) => (a.writingDue ?? '').localeCompare(b.writingDue ?? ''))
+        .slice(0, Math.ceil(limit / 2));
+    const priorityIds = new Set(priority.map((card) => card.id));
+
+    available
+        .filter((card) => !priorityIds.has(card.id))
         .forEach((card) => {
             const cards = cardsByDate.get(card.introducedDate) ?? [];
             cards.push(card);
@@ -218,7 +264,7 @@ export function buildWritingSession(
 
     const size = (date: string) => cardsByDate.get(date)?.length ?? 0;
     const alloc = new Map<string, number>();
-    let remaining = limit;
+    let remaining = limit - priority.length;
 
     // Répartition équitable entre les trois dernières listes ; ce qu'une
     // liste trop courte ne peut pas fournir est reporté sur les autres.
@@ -239,8 +285,10 @@ export function buildWritingSession(
         remaining -= give;
     }
 
-    const cards: CardState[] = [];
-    const byDay: WritingSession['byDay'] = [];
+    const cards: CardState[] = [...priority];
+    const byDay: WritingSession['byDay'] = priority.length > 0
+        ? [{ date: '', label: 'à retravailler', count: priority.length }]
+        : [];
     let variantCount = 1;
 
     dates.forEach((date, index) => {

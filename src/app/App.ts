@@ -6,6 +6,7 @@ import {
     buildWritingSession,
     rerollDailyNewCards,
     scheduleCard,
+    scheduleWriting,
     getPhrase,
     totalMastered,
     shuffle,
@@ -26,6 +27,7 @@ export class App {
     private queue: CardState[] = [];
     private queueIndex = 0;
     private sessionKind: SessionKind = 'daily';
+    private requeued = new Map<string, number>();
     private flipped = false;
     private productionAnswer = '';
     private evaluation: TranslationEvaluation | null = null;
@@ -101,6 +103,7 @@ export class App {
         this.evaluation = null;
         this.sessionStudied = 0;
         this.sessionAgain = 0;
+        this.requeued.clear();
 
         if (this.queue.length === 0) {
             this.view = 'summary';
@@ -131,13 +134,24 @@ export class App {
         const card = this.queue[this.queueIndex];
         if (!card) return;
 
-        if (this.sessionKind === 'daily') {
-            const today = todayISO();
-            const updated = scheduleCard(card, g, today);
-            this.state.cards[updated.id] = updated;
-        }
+        const today = todayISO();
+        const updated = this.sessionKind === 'daily'
+            ? scheduleCard(card, g, today)
+            : scheduleWriting(this.state.cards[card.id] ?? card, g, today);
+        this.state.cards[updated.id] = updated;
+
         this.sessionStudied++;
-        if (g === 'again') this.sessionAgain++;
+        if (g === 'again') {
+            this.sessionAgain++;
+            // « Encore » : la carte revient quelques cartes plus loin dans la
+            // séance (au plus deux fois) pour être retravaillée tout de suite.
+            const repeats = this.requeued.get(card.id) ?? 0;
+            if (repeats < 2) {
+                this.requeued.set(card.id, repeats + 1);
+                const at = Math.min(this.queue.length, this.queueIndex + 4);
+                this.queue.splice(at, 0, updated);
+            }
+        }
 
         this.queueIndex++;
         this.flipped = false;
@@ -157,9 +171,11 @@ export class App {
                     if (entry) entry.studied += this.sessionStudied;
                 }
                 this.persist();
+            } else {
+                this.persist();
             }
             this.view = 'summary';
-        } else if (this.sessionKind === 'daily') {
+        } else {
             this.persist();
         }
         this.render();
@@ -352,7 +368,9 @@ export class App {
         const writingHelp = document.createElement('p');
         writingHelp.className = 'writing-help';
         writingHelp.textContent = writingCount > 0
-            ? writingSession.byDay.map((entry) => `${entry.count} de ${entry.label}`).join(' + ') + '.'
+            ? writingSession.byDay
+                .map((entry) => entry.date ? `${entry.count} de ${entry.label}` : `${entry.count} ${entry.label}`)
+                .join(' + ') + '.'
             : 'Disponible dès le premier jour, sans attendre que les cartes soient maîtrisées.';
         wrap.appendChild(writingHelp);
         return wrap;
@@ -408,10 +426,10 @@ export class App {
             const btns = document.createElement('div');
             btns.className = 'grade-buttons';
             btns.innerHTML = `
-                <button data-g="again" class="grade-btn grade-again">Encore <span>1</span></button>
-                <button data-g="hard" class="grade-btn grade-hard">Difficile <span>2</span></button>
-                <button data-g="good" class="grade-btn grade-good">Bien <span>3</span></button>
-                <button data-g="easy" class="grade-btn grade-easy">Facile <span>4</span></button>
+                <button data-g="again" class="grade-btn grade-again" title="Revient dans cette séance puis demain">Encore <span>1</span></button>
+                <button data-g="hard" class="grade-btn grade-hard" title="Revient demain">Difficile <span>2</span></button>
+                <button data-g="good" class="grade-btn grade-good" title="Revient selon l'intervalle normal (1, 2, 4, 7… jours)">Bien <span>3</span></button>
+                <button data-g="easy" class="grade-btn grade-easy" title="Revient beaucoup plus tard">Facile <span>4</span></button>
             `;
             btns.querySelectorAll<HTMLButtonElement>('button').forEach((b) => {
                 b.onclick = (ev) => {
@@ -609,7 +627,7 @@ export class App {
             <p>${this.sessionAgain} à revoir bientôt.</p>
             ${this.sessionKind === 'daily'
                 ? `<p>Série actuelle : 🔥 ${this.state.streak} jour(s) consécutif(s).</p>`
-                : `<p>Cet entraînement libre ne modifie pas le planning de répétition espacée.</p>`}
+                : `<p>Tes retours planifient les prochains exercices écrits : Encore/Difficile → demain, Bien/Facile → plus espacé.</p>`}
         `;
         const btn = document.createElement('button');
         btn.className = 'primary-btn';
