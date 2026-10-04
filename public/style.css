@@ -337,6 +337,95 @@ body {
     font-size: 0.88rem;
 }
 
+.verb-grid {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 4px 10px;
+    margin: 8px 0 0;
+    font-size: 0.86rem;
+    text-align: left;
+}
+
+.verb-grid dt {
+    opacity: 0.7;
+    font-weight: 600;
+}
+
+.verb-grid dd {
+    margin: 0;
+}
+
+.verb-infinitive {
+    font-weight: 700;
+    color: #ffd166;
+}
+
+.verb-wrong {
+    color: #ff9b85;
+}
+
+.verb-reason {
+    font-style: italic;
+}
+
+.verb-formation {
+    opacity: 0.85;
+}
+
+.verb-analysis {
+    margin-top: 10px;
+    text-align: left;
+    font-size: 0.86rem;
+}
+
+.verb-analysis summary {
+    cursor: pointer;
+    font-weight: 600;
+    opacity: 0.85;
+}
+
+.verb-analysis ul {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+}
+
+.verb-item {
+    padding: 8px 10px;
+    border-left: 3px solid #06d6a0;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.verb-item + .verb-item {
+    margin-top: 6px;
+}
+
+.verb-item.verb-wrong,
+.verb-item.verb-missing {
+    border-left-color: #ef476f;
+    color: inherit;
+}
+
+.verb-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.verb-badge {
+    margin-left: auto;
+    font-size: 0.78rem;
+    opacity: 0.85;
+}
+
+.verb-item .verb-reason {
+    margin: 4px 0 0;
+    font-size: 0.82rem;
+    opacity: 0.85;
+}
+
 .secondary-btn {
     align-self: center;
     padding: 10px 20px;

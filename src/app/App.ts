@@ -537,23 +537,38 @@ export class App {
                 correction.textContent = issue.found
                     ? `${issue.found.form} → ${issue.expected.form}`
                     : `Forme manquante : ${issue.expected.form}`;
-
-                const expected = document.createElement('p');
-                expected.textContent = `Attendu : ${issue.expected.infinitive} · ${issue.expected.tense} · ${issue.expected.person}.`;
-                detail.append(correction, expected);
-
-                if (issue.found) {
-                    const found = document.createElement('p');
-                    found.textContent = `Ta forme : ${issue.found.infinitive} · ${issue.found.tense} · ${issue.found.person}.`;
-                    detail.appendChild(found);
-                }
+                detail.appendChild(correction);
 
                 const explanation = document.createElement('p');
                 explanation.textContent = issue.explanation;
                 detail.appendChild(explanation);
+
+                const grid = document.createElement('dl');
+                grid.className = 'verb-grid';
+                const addRow = (label: string, value: string, className = '') => {
+                    const dt = document.createElement('dt');
+                    dt.textContent = label;
+                    const dd = document.createElement('dd');
+                    dd.textContent = value;
+                    if (className) dd.className = className;
+                    grid.append(dt, dd);
+                };
+                addRow('Infinitif', issue.expected.infinitive, 'verb-infinitive');
+                addRow('Temps attendu', `${issue.expected.tense} · ${issue.expected.person}`);
+                if (issue.found) {
+                    addRow('Ta forme', issue.found.infinitive === 'forme inconnue'
+                        ? `« ${issue.found.form} » : forme non reconnue`
+                        : `« ${issue.found.form} » = ${issue.found.infinitive} · ${issue.found.tense} · ${issue.found.person}`, 'verb-wrong');
+                }
+                if (issue.expected.reason) addRow('Pourquoi ce temps', issue.expected.reason, 'verb-reason');
+                if (issue.formation) addRow('Rappel', issue.formation, 'verb-formation');
+                detail.appendChild(grid);
                 section.appendChild(detail);
             });
             result.appendChild(section);
+        }
+        if (this.evaluation.verbs.length > 0) {
+            result.appendChild(this.renderVerbAnalysis(this.evaluation));
         }
         if (this.evaluation.level !== 'correct' && this.evaluation.spellingIssues.length > 0) {
             const section = document.createElement('div');
@@ -575,7 +590,9 @@ export class App {
         }
         if (this.evaluation.level !== 'correct' && this.evaluation.missingWords.length > 0) {
             const missingLexicon = this.evaluation.missingWords.filter((word) =>
-                !this.evaluation?.conjugationIssues.some((issue) => issue.expected.form === word));
+                !this.evaluation?.conjugationIssues.some((issue) => issue.expected.form
+                    .split(' ')
+                    .some((part) => part.normalize('NFD').replace(/[\u0300-\u036f]/g, '') === word)));
             if (missingLexicon.length > 0) {
                 const section = document.createElement('div');
                 section.className = 'feedback-section';
@@ -616,6 +633,43 @@ export class App {
 
         container.append(result, retryButton);
         return container;
+    }
+
+    private renderVerbAnalysis(evaluation: TranslationEvaluation): HTMLElement {
+        const details = document.createElement('details');
+        details.className = 'verb-analysis';
+        // Réponse correcte : pas de commentaire imposé, l'analyse reste repliée.
+        details.open = evaluation.level !== 'correct' && evaluation.conjugationIssues.length === 0;
+        const summary = document.createElement('summary');
+        summary.textContent = evaluation.level === 'correct'
+            ? 'Voir l’analyse des verbes'
+            : 'Analyse des verbes de la proposition';
+        details.appendChild(summary);
+
+        const list = document.createElement('ul');
+        evaluation.verbs.forEach((verb) => {
+            const item = document.createElement('li');
+            item.className = `verb-item verb-${verb.status}`;
+
+            const head = document.createElement('div');
+            head.className = 'verb-head';
+            const form = document.createElement('strong');
+            form.textContent = verb.form;
+            const meta = document.createElement('span');
+            meta.textContent = ` — ${verb.infinitive} · ${verb.tense} · ${verb.person}`;
+            const badge = document.createElement('span');
+            badge.className = 'verb-badge';
+            badge.textContent = verb.status === 'ok' ? '✓' : verb.status === 'missing' ? 'manquant' : `toi : ${verb.userForm}`;
+            head.append(form, meta, badge);
+
+            const reason = document.createElement('p');
+            reason.className = 'verb-reason';
+            reason.textContent = verb.reason;
+            item.append(head, reason);
+            list.appendChild(item);
+        });
+        details.appendChild(list);
+        return details;
     }
 
     private renderSummary(): HTMLElement {
